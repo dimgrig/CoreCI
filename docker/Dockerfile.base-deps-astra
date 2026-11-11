@@ -1,0 +1,47 @@
+# ---------- Базовый образ с зависимостями ----------
+FROM epicmorg/astralinux:1.8-main
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Устанавливаем компилятор, Qt5 и все необходимые dev-пакеты
+RUN apt update && \
+    apt install -y --no-install-recommends \
+        build-essential \
+        qt5-qmake \
+        qtbase5-dev \
+        qtbase5-private-dev \
+        libqt5serialbus5-dev \
+        libqt5serialport5-dev \
+        libqt5sql5-sqlite \
+        libqt5svg5-dev \
+        libqt5opengl5-dev \ 
+        libqt5x11extras5-dev \
+        wget git ca-certificates curl
+
+# Устанавливаем libxerces-c-dev 
+RUN apt install -y --no-install-recommends libxerces-c-dev 
+
+# Устанавливаем dpkg-dev, если его нет (обычно есть в Debian/Ubuntu)
+RUN apt-get install -y --no-install-recommends dpkg-dev
+
+RUN apt-get install -y --no-install-recommends cmake
+
+RUN apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Сборка qtmqtt из исходников (требуется, т.к. нет пакета в Debian 12)
+RUN git clone --branch 5.15.2 --depth 1 https://github.com/qt/qtmqtt.git /tmp/qtmqtt && \
+    cd /tmp/qtmqtt && \
+    qmake qtmqtt.pro && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/qtmqtt
+
+# docker build -t base-deps-linux:latest -f Dockerfile.base-deps-linux ..
+
+# Устанавливаем CQtDeployer
+#COPY /deb/CQtDeployer*.deb /tmp/
+#RUN dpkg -i /tmp/CQtDeployer*.deb && \
+#rm /tmp/CQtDeployer*.deb
