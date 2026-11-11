@@ -1,0 +1,34 @@
+name: Build qt68-bookworm-arm64 (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      qt_version:
+        description: 'Qt version'
+        required: true
+        default: '6.8.5'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm       # нативный ARM, не QEMU
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.qt68-bookworm-arm64
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/qt68-bookworm-arm64:${{ inputs.qt_version }}
+          cache-from: type=gha,scope=qt68-arm64
+          cache-to:   type=gha,mode=max,scope=qt68-arm64

@@ -1,0 +1,157 @@
+name: Build base-deps images
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'Dockerfile.base-deps-*'
+      - '.github/workflows/base-deps.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # qt68-bookworm-arm64 собирается ЛОКАЛЬНО на arm64-машине и пушится
+  # вручную (см. Dockerfile.qt68-bookworm-arm64). CI его только тянет.
+  QT68_IMAGE: ghcr.io/dimgrig/qt68-bookworm-arm64:6.8.5
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # base-deps — матрица платформ. arm64-qt6 тянет qt68 из ghcr.
+  # ────────────────────────────────────────────────────────────
+  build-base-deps:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write     # push base-deps в ghcr
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux amd64 (aqt, OK) ─────────────────────────
+          - name:     linux-qt5
+            dockerfile: Dockerfile.base-deps-linux
+            image:    core-base-deps-linux
+            tag:      qt5-bookworm
+            runner:   ubuntu-latest
+            platforms: linux/amd64
+            extra_build_args: ''
+
+          - name:     linux-qt6
+            dockerfile: Dockerfile.base-deps-linux-qt6
+            image:    core-base-deps-linux
+            tag:      qt6-bookworm
+            runner:   ubuntu-latest
+            platforms: linux/amd64
+            extra_build_args: ''
+
+          # ── Windows (aqt, OK) ─────────────────────────────
+          - name:     win-qt5
+            dockerfile: Dockerfile.base-deps-win
+            image:    core-base-deps-win
+            tag:      qt5-mingw
+            runner:   ubuntu-latest
+            platforms: linux/amd64
+            extra_build_args: ''
+
+          - name:     win-qt6
+            dockerfile: Dockerfile.base-deps-win64-qt6
+            image:    core-base-deps-win64
+            tag:      qt6-mingw
+            runner:   ubuntu-latest
+            platforms: linux/amd64
+            extra_build_args: ''
+
+          # ── ARM64 ─────────────────────────────────────────
+          - name:     arm64-qt5
+            dockerfile: Dockerfile.base-deps-arm64
+            image:    core-base-deps-arm64
+            tag:      qt5-bookworm
+            runner:   ubuntu-24.04-arm
+            platforms: linux/arm64
+            extra_build_args: ''
+
+          - name:     arm64-qt6
+            dockerfile: Dockerfile.base-deps-arm64-qt6
+            image:    core-base-deps-arm64
+            tag:      qt6-bookworm-aqt
+            runner:   ubuntu-24.04-arm
+            platforms: linux/arm64
+            extra_build_args: "QT68_IMAGE=ghcr.io/dimgrig/qt68-bookworm-arm64:6.8.5"
+
+          # ── ARMv7 (QEMU) ──────────────────────────────────
+          - name:     armv7-qt5
+            dockerfile: Dockerfile.base-deps-armv7
+            image:    core-base-deps-armv7
+            tag:      qt5-bullseye
+            runner:   ubuntu-latest
+            platforms: linux/arm/v7
+            extra_build_args: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (только armv7)
+        if: matrix.platforms == 'linux/arm/v7'
+        uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Проверяем, что qt68-arm64 доступен в ghcr — fail fast,
+      # если владелец забыл его запушить или сделал private.
+      - name: Verify qt68 image is pullable
+        if: matrix.name == 'arm64-qt6'
+        run: |
+          docker pull "${{ env.QT68_IMAGE }}" || {
+            echo "ERROR: cannot pull ${{ env.QT68_IMAGE }}" >&2
+            echo "" >&2
+            echo "Make sure:" >&2
+            echo "  1. qt68-bookworm-arm64:6.8.0 was pushed (see Dockerfile.qt68-bookworm-arm64)" >&2
+            echo "  2. Package visibility is Public in ghcr.io/settings/packages" >&2
+            exit 1
+          }
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ matrix.tag }}
+          build-args: ${{ matrix.extra_build_args }}
+          # Чтобы buildkit мог тянуть базовый образ из ghcr:
+          secrets: |
+            GIT_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha,scope=base-deps-${{ matrix.name }}
+          cache-to:   type=gha,mode=max,scope=base-deps-${{ matrix.name }}
+
+  # ────────────────────────────────────────────────────────────
+  # innosetup-base — без изменений
+  # ────────────────────────────────────────────────────────────
+  build-innosetup-base:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.innosetup-base
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/innosetup-base:latest
+          cache-from: type=gha,scope=innosetup-base
+          cache-to:   type=gha,mode=max,scope=innosetup-base

@@ -1,0 +1,59 @@
+FROM debian:bookworm-slim
+
+# Установка Wine и зависимостей
+RUN dpkg --add-architecture i386 && \
+    apt-get update -y --no-install-recommends
+
+RUN apt-get install -y --no-install-recommends \
+        xvfb \
+        ca-certificates 
+
+RUN apt-get install -y --no-install-recommends \
+        wine wine32 wine64 
+
+RUN apt-get install -y --no-install-recommends \
+        locales 
+
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/*    
+
+# Генерация локали
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Копируем портативную версию Inno Setup
+#COPY deb/innosetup-portable/ /tmp/innosetup-portable/
+#RUN test -f "/tmp/innosetup-portable/app/ISCC.exe" || (echo "ISCC.exe not found" && exit 1)
+
+# Скачиваем портативную сборку Inno Setup как 7z-архив (portapps 7.1.0-6).
+# 7z-архив распаковывается без Wine и innoextract — быстрее и надёжнее.
+ARG INNOSETUP_7Z_URL=https://github.com/portapps/innosetup-portable/releases/download/7.1.0-6/innosetup-portable-win64-7.1.0-7.7z
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends p7zip-full wget \
+    && wget -q -O /tmp/innosetup.7z "${INNOSETUP_7Z_URL}" \
+    && mkdir -p /tmp/innosetup-portable \
+    && 7z x -y -o/tmp/innosetup-portable /tmp/innosetup.7z \
+    && rm -f /tmp/innosetup.7z
+
+RUN test -f "/tmp/innosetup-portable/app/ISCC.exe" || (echo "ISCC.exe not found" && exit 1)
+
+# Создаём свежий wine prefix
+RUN WINEPREFIX=/tmp/wine_prefix wineboot -u 2>/dev/null || true
+
+RUN printf '#!/bin/bash\n\
+export WINEPREFIX=/tmp/wine_prefix\n\
+export LANG=en_US.UTF-8\n\
+export LC_ALL=en_US.UTF-8\n\
+Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &\n\
+XVFB_PID=$!\n\
+# Преобразуем путь в Windows-стиль, убираем завершающий перевод строки\n\
+WINEPATH=$(winepath -w "$1" | tr -d '"'"'\r'"'"')\n\
+shift\n\
+DISPLAY=:99 wine "/tmp/innosetup-portable/app/ISCC.exe" "$WINEPATH" "$@"\n\
+EXIT_CODE=$?\n\
+kill $XVFB_PID\n\
+exit $EXIT_CODE\n' > /usr/local/bin/iscc && chmod +x /usr/local/bin/iscc
+
+
+# docker build -t innosetup-base:latest -f Dockerfile.innosetup-base ..

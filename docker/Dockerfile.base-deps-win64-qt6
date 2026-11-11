@@ -1,0 +1,154 @@
+# syntax=docker/dockerfile:1
+# ============================================================================
+# base-deps-win64-qt6: Ubuntu 24.04 + MinGW-w64 (GCC 13) + Qt 6.8.0
+#   • target  win64_mingw → .dll/.dll.a для Windows x64 (транзитивно тянет Svg, qttools, Qml, Quick и т.п.)
+#   • host    gcc_64      → moc/uic/rcc/lrelease (ELF, работают на Linux)
+#   • qtmqtt  (source)    → Qt6::Mqtt (нет в архивах Qt)
+#   • toolchain file      → /opt/x86_64-w64-mingw32.cmake
+# ============================================================================
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        mingw-w64 \
+        cmake ninja-build \
+        python3 python3-pip \
+        git wget ca-certificates curl p7zip-full \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --break-system-packages aqtinstall
+
+# ── Конфиг aqtinstall (зеркало, blacklist, без хешей) ──
+RUN mkdir -p /root/.config && \
+    cat > /root/.config/aqt-settings.ini <<'EOF'
+[aqt]
+baseurl: https://mirror.yandex.ru/mirrors/qt.io
+
+[requests]
+max_retries_on_checksum_error: 1
+max_retries_to_retrieve_hash: 1
+INSECURE_NOT_FOR_PRODUCTION_ignore_hash: True
+
+[mirrors]
+trusted_mirrors: https://mirror.yandex.ru/mirrors/qt.io
+blacklist: https://download.qt.io https://ftp2.nluug.nl/languages/qt
+fallbacks: https://mirrors.ocf.berkeley.edu/qt https://ftp.jaist.jp/pub/qtproject
+EOF
+
+ARG QT6_VERSION=6.8.0
+
+# ── Target: Windows MinGW x64 ──
+# Модули: SerialBus / SerialPort / Core5Compat / StateMachine нужны Core напрямую.
+# Svg, qttools, Qml, Quick приходят транзитивно — явно их не заказываем.
+RUN aqt -c /root/.config/aqt-settings.ini install-qt windows desktop ${QT6_VERSION} win64_mingw \
+        -m qtserialbus qtserialport qt5compat qtscxml qtshadertools \
+        -O /opt/Qt
+
+# ── Host: Linux gcc_64 — moc/uic/rcc для кросс-сборки ──
+# Без этого CMake попытается запустить moc.exe → Exec format error.
+RUN aqt -c /root/.config/aqt-settings.ini install-qt linux desktop ${QT6_VERSION} linux_gcc_64 \
+        --archives qtbase qttools \
+        -O /opt/Qt
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        qt6-base-dev-tools \
+        qt6-tools-dev-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -e; \
+    Q=/opt/Qt/${QT6_VERSION}/gcc_64; \
+    # ── moc: оставляем aqt-версию (6.8.0, ABI-совместима с target), ──
+    # ── только добавляем симлинк в bin/, где его ждут legacy CMake-конфиги. ──
+    [ -x "$Q/libexec/moc" ] || { echo "MISSING aqt moc: $Q/libexec/moc" >&2; exit 1; }; \
+    rm -f "$Q/bin/moc"; \
+    ln -s ../libexec/moc "$Q/bin/moc"; \
+    echo "host tool: bin/moc -> libexec/moc (aqt 6.8.0)"; \
+    # ── uic/rcc/lrelease: aqt-сборки требуют libicu73 (нет в Ubuntu 24.04), ──
+    # ── заменяем на apt-версии (libicu74-safe). ──
+    for tool in uic rcc lrelease; do \
+        src=""; \
+        for cand in /usr/lib/qt6/libexec/$tool /usr/lib/qt6/bin/$tool /usr/bin/$tool; do \
+            [ -x "$cand" ] && src="$cand" && break; \
+        done; \
+        [ -n "$src" ] || { echo "MISSING apt tool: $tool" >&2; exit 1; }; \
+        rm -f "$Q/bin/$tool" "$Q/libexec/$tool"; \
+        ln -s "$src" "$Q/bin/$tool"; \
+        ln -s "$src" "$Q/libexec/$tool"; \
+        echo "host tool: bin/$tool, libexec/$tool -> $src"; \
+    done; \
+    # ── Fail-fast: проверка в том же shell. ──
+    "$Q/bin/moc"      --version; \
+    "$Q/bin/uic"      --version; \
+    "$Q/bin/rcc"      --version; \
+    "$Q/bin/lrelease" -version | head -1
+    
+# ── Toolchain file для CMake ──
+RUN cat > /opt/x86_64-w64-mingw32.cmake <<EOF
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+set(CMAKE_C_COMPILER   x86_64-w64-mingw32-gcc)
+set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
+set(CMAKE_RC_COMPILER  x86_64-w64-mingw32-windres)
+#set(CMAKE_MAKE_PROGRAM mingw32-make)
+
+# Где искать libs/headers: mingw sysroot + target Qt
+set(CMAKE_FIND_ROOT_PATH
+    /usr/x86_64-w64-mingw32
+    /opt/Qt/${QT6_VERSION}/mingw_64)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+# Host Qt (Linux gcc_64) — moc/uic/rcc/lrelease
+set(QT_HOST_PATH /opt/Qt/${QT6_VERSION}/gcc_64 CACHE PATH "Qt host tools")
+EOF
+
+ENV PATH="/opt/Qt/${QT6_VERSION}/mingw_64/bin:/opt/Qt/${QT6_VERSION}/gcc_64/bin:${PATH}"
+ENV QT6_INSTALL_PREFIX="/opt/Qt/${QT6_VERSION}/mingw_64"
+ENV QT_HOST_PATH="/opt/Qt/${QT6_VERSION}/gcc_64"
+ENV CMAKE_TOOLCHAIN_FILE="/opt/x86_64-w64-mingw32.cmake"
+
+# ── qtmqtt для target (в архивах Qt отсутствует) ──
+RUN git clone --branch ${QT6_VERSION} --depth 1 https://github.com/qt/qtmqtt.git /tmp/qtmqtt && \
+    cmake -S /tmp/qtmqtt -B /tmp/qtmqtt/build -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/x86_64-w64-mingw32.cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_PREFIX_PATH=/opt/Qt/${QT6_VERSION}/mingw_64 \
+        -DQT_HOST_PATH=/opt/Qt/${QT6_VERSION}/gcc_64 \
+        -DCMAKE_INSTALL_PREFIX=/opt/Qt/${QT6_VERSION}/mingw_64 && \
+    cmake --build /tmp/qtmqtt/build -j"$(nproc)" && \
+    cmake --install /tmp/qtmqtt/build && \
+    rm -rf /tmp/qtmqtt
+
+# ── SANITY CHECK ──
+RUN set -eu; \
+    check() { \
+        if [ ! -e "$1" ]; then \
+            echo "MISSING: $1" >&2; \
+            [ -n "$2" ] && find /opt/Qt -name "$2" 2>/dev/null | head -3 >&2 || true; \
+            exit 1; \
+        fi; \
+    }; \
+    # target (Windows) — всё, что Core ищет через find_package(Qt6)
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6/Qt6Config.cmake "Qt6Config.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6Svg/Qt6SvgConfig.cmake "Qt6SvgConfig.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6SerialPort/Qt6SerialPortConfig.cmake "Qt6SerialPortConfig.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6SerialBus/Qt6SerialBusConfig.cmake "Qt6SerialBusConfig.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6Core5Compat/Qt6Core5CompatConfig.cmake "Qt6Core5CompatConfig.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6StateMachine/Qt6StateMachineConfig.cmake "Qt6StateMachineConfig.cmake"; \
+    check /opt/Qt/${QT6_VERSION}/mingw_64/lib/cmake/Qt6Mqtt/Qt6MqttConfig.cmake "Qt6MqttConfig.cmake"; \
+    # host (Linux) — moc/uic/rcc/lrelease
+    check /opt/Qt/${QT6_VERSION}/gcc_64/bin/moc "moc"; \
+    check /opt/Qt/${QT6_VERSION}/gcc_64/bin/uic "uic"; \
+    check /opt/Qt/${QT6_VERSION}/gcc_64/bin/rcc "rcc"; \
+    # cross-компилятор
+    x86_64-w64-mingw32-g++ --version | head -1; \
+    /opt/Qt/${QT6_VERSION}/gcc_64/bin/moc --version; \
+    echo "OK: base-deps-win64-qt6 (MinGW 13 + Qt ${QT6_VERSION} target+host + qtmqtt)"

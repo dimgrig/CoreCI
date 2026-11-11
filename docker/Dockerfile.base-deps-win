@@ -1,0 +1,53 @@
+# ---------- Базовый образ с зависимостями ----------
+FROM ghcr.io/mdimura/docker-mingw-arch:qt5
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+WORKDIR /tmp
+
+# Сборка qtserialbus (для Windows)
+RUN git clone --branch 5.15 --depth 1 https://github.com/qt/qtserialbus.git /tmp/qtserialbus && \
+    cd /tmp/qtserialbus && \
+    i686-w64-mingw32-qmake-qt5 qtserialbus.pro CONFIG+=release && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/qtserialbus
+
+# Сборка qtmqtt (для Windows)
+RUN git clone --branch 5.15.2 --depth 1 https://github.com/qt/qtmqtt.git /tmp/qtmqtt && \
+    cd /tmp/qtmqtt && \
+    i686-w64-mingw32-qmake-qt5 qtmqtt.pro CONFIG+=release && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/qtmqtt
+
+#сборка libxerces из исходников
+RUN pacman -S --noconfirm --needed autoconf automake libtool curl
+
+# Сборка статической Xerces-C для Windows (i686)
+RUN cd /tmp && \
+    curl -L -O https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-3.2.5.tar.gz
+
+RUN tar xzf /tmp/xerces-c-3.2.5.tar.gz && cd /tmp/xerces-c-3.2.5
+
+# Сборка статической Xerces-C через autotools
+RUN cd /tmp/xerces-c-3.2.5 && \
+    ./configure \
+        --host=i686-w64-mingw32 \
+        --prefix=/usr/i686-w64-mingw32 \
+        --disable-shared \
+        --enable-transcoder-windows \
+        --enable-xmlch-wchar_t \
+        --without-icu \
+        --disable-network \
+        CXXFLAGS="-static-libgcc -static-libstdc++ -O2 -fpermissive" && \
+    make -j$(nproc) && \
+    make install 
+
+# Очистка
+RUN rm -rf /tmp/
+RUN pacman -S --noconfirm --needed autoconf automake libtool \
+    && pacman -Scc --noconfirm   # очистка кэша pacman
+
+# docker build -t base-deps-win:latest -f Dockerfile.base-deps-win ..

@@ -1,0 +1,108 @@
+# ---------- Базовый образ с зависимостями ----------
+FROM debian:bullseye-slim AS cqtdeployer-builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Устанавливаем компилятор, Qt5 и все необходимые dev-пакеты
+# Добавляем снимок репозитория в sources.list и отключаем проверку срока действия
+RUN echo "deb http://archive.debian.org/debian bullseye main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until && \
+    echo 'Acquire::Check-Date "false";' > /etc/apt/apt.conf.d/99no-check-date && \
+    echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries && \
+    apt update && \
+    apt install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        qt5-qmake \
+        qtbase5-dev \
+        qtbase5-private-dev \
+        wget git ca-certificates curl \
+        qtdeclarative5-dev \
+        libqt5quick5 \
+        libqt5quickwidgets5 \
+        qml-module-qtquick2 \
+        qml-module-qtquick-controls2 \
+        qml-module-qtquick-layouts \
+        qttools5-dev-tools \
+        qtquickcontrols2-5-dev \
+        qtwebengine5-dev \
+        libqt5opengl5-dev \
+        libqt5webenginewidgets5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Клонирование, инициализация сабмодулей, сборка и установка CQtDeployer через QMake
+RUN git clone --branch v1.5 https://github.com/QuasarApp/CQtDeployer.git /tmp/cqtdeployer && \
+    cd /tmp/cqtdeployer && \
+    git submodule update --init --recursive
+
+RUN cd /tmp/cqtdeployer && \
+    qmake && \
+    make -j$(nproc) && make install
+
+RUN cd /tmp/cqtdeployer && \
+    cp $(find /tmp/cqtdeployer -name cqtdeployer -type f | head -1) /usr/local/bin/cqtdeployer && \
+    # Копируем все собранные .so файлы (включая симлинки)
+    find /tmp/cqtdeployer -name "*.so*" -type f -exec cp -d {} /usr/local/lib/ \; && \
+    # Обновляем кэш динамического линковщика
+    ldconfig
+
+# ---------- Финальный образ ----------
+FROM debian:bullseye-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Устанавливаем компилятор, Qt5 и все необходимые dev-пакеты
+# Добавляем снимок репозитория в sources.list и отключаем проверку срока действия
+RUN echo "deb http://archive.debian.org/debian bullseye main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until && \
+    echo 'Acquire::Check-Date "false";' > /etc/apt/apt.conf.d/99no-check-date && \
+    echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/99retries && \
+    apt update && \
+    apt install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        qt5-qmake \
+        qtbase5-dev \
+        qtbase5-private-dev \
+        wget git ca-certificates curl \
+        qtdeclarative5-dev \
+        libqt5quick5 \
+        libqt5quickwidgets5 \
+        qml-module-qtquick2 \
+        qml-module-qtquick-controls2 \
+        qml-module-qtquick-layouts \
+        qttools5-dev-tools \
+        qtquickcontrols2-5-dev \
+        qtwebengine5-dev \
+        libqt5webenginewidgets5 \
+        libqt5serialbus5-dev \
+        libqt5serialport5-dev \
+        libqt5sql5-sqlite \
+        libqt5svg5-dev \
+        libqt5x11extras5-dev \
+        libqt5opengl5-dev \
+        libxerces-c-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Сборка qtmqtt из исходников (требуется, т.к. нет пакета в Debian 12)
+RUN git clone --branch 5.15.2 --depth 1 https://github.com/qt/qtmqtt.git /tmp/qtmqtt && \
+    cd /tmp/qtmqtt && \
+    qmake qtmqtt.pro && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/qtmqtt
+
+# Копируем CQtDeployer из первой стадии
+COPY --from=cqtdeployer-builder /usr/local/bin/cqtdeployer /usr/local/bin/cqtdeployer
+COPY --from=cqtdeployer-builder /usr/local/lib/lib* /usr/local/lib/
+
+# Проверка установки
+RUN ldconfig && cqtdeployer
+
+# docker build --platform linux/arm64 -t base-deps-armv7:latest -f Dockerfile.base-deps-armv7 ..
