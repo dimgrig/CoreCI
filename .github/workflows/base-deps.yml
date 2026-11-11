@@ -2,32 +2,29 @@ name: Build base-deps images
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, main]
     paths:
-      - 'Dockerfile.base-deps-*'
+      - 'docker/Dockerfile.base-deps-*'
+      - 'docker/Dockerfile.innosetup-base'
       - '.github/workflows/base-deps.yml'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   # qt68-bookworm-arm64 собирается ЛОКАЛЬНО на arm64-машине и пушится
-  # вручную (см. Dockerfile.qt68-bookworm-arm64). CI его только тянет.
+  # вручную (см. docker/Dockerfile.qt68-bookworm-arm64). CI его только тянет.
   QT68_IMAGE: ghcr.io/dimgrig/qt68-bookworm-arm64:6.8.5
 
 jobs:
-  # ────────────────────────────────────────────────────────────
-  # base-deps — матрица платформ. arm64-qt6 тянет qt68 из ghcr.
-  # ────────────────────────────────────────────────────────────
   build-base-deps:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      packages: write     # push base-deps в ghcr
+      packages: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── Linux amd64 (aqt, OK) ─────────────────────────
           - name:     linux-qt5
             dockerfile: Dockerfile.base-deps-linux
             image:    core-base-deps-linux
@@ -44,7 +41,6 @@ jobs:
             platforms: linux/amd64
             extra_build_args: ''
 
-          # ── Windows (aqt, OK) ─────────────────────────────
           - name:     win-qt5
             dockerfile: Dockerfile.base-deps-win
             image:    core-base-deps-win
@@ -61,7 +57,6 @@ jobs:
             platforms: linux/amd64
             extra_build_args: ''
 
-          # ── ARM64 ─────────────────────────────────────────
           - name:     arm64-qt5
             dockerfile: Dockerfile.base-deps-arm64
             image:    core-base-deps-arm64
@@ -78,7 +73,6 @@ jobs:
             platforms: linux/arm64
             extra_build_args: "QT68_IMAGE=ghcr.io/dimgrig/qt68-bookworm-arm64:6.8.5"
 
-          # ── ARMv7 (QEMU) ──────────────────────────────────
           - name:     armv7-qt5
             dockerfile: Dockerfile.base-deps-armv7
             image:    core-base-deps-armv7
@@ -102,8 +96,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Проверяем, что qt68-arm64 доступен в ghcr — fail fast,
-      # если владелец забыл его запушить или сделал private.
       - name: Verify qt68 image is pullable
         if: matrix.name == 'arm64-qt6'
         run: |
@@ -111,7 +103,7 @@ jobs:
             echo "ERROR: cannot pull ${{ env.QT68_IMAGE }}" >&2
             echo "" >&2
             echo "Make sure:" >&2
-            echo "  1. qt68-bookworm-arm64:6.8.0 was pushed (see Dockerfile.qt68-bookworm-arm64)" >&2
+            echo "  1. qt68-bookworm-arm64:6.8.5 was pushed (Actions → 'Build qt68-bookworm-arm64')" >&2
             echo "  2. Package visibility is Public in ghcr.io/settings/packages" >&2
             exit 1
           }
@@ -119,20 +111,16 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: docker/${{ matrix.dockerfile }}
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ matrix.tag }}
           build-args: ${{ matrix.extra_build_args }}
-          # Чтобы buildkit мог тянуть базовый образ из ghcr:
           secrets: |
             GIT_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=gha,scope=base-deps-${{ matrix.name }}
           cache-to:   type=gha,mode=max,scope=base-deps-${{ matrix.name }}
 
-  # ────────────────────────────────────────────────────────────
-  # innosetup-base — без изменений
-  # ────────────────────────────────────────────────────────────
   build-innosetup-base:
     runs-on: ubuntu-latest
     permissions:
@@ -149,7 +137,7 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.innosetup-base
+          file: docker/Dockerfile.innosetup-base
           platforms: linux/amd64
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/innosetup-base:latest

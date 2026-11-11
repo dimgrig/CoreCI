@@ -26,7 +26,7 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.qt68-bookworm-arm64
+          file: docker/Dockerfile.qt68-bookworm-arm64
           platforms: linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/qt68-bookworm-arm64:${{ inputs.qt_version }}
