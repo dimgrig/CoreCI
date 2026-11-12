@@ -63,8 +63,8 @@ parse_platform_spec() {
 # ── Cache / SHA helpers ─────────────────────────────────────────────
 _cache_args() {
     CACHE_ARGS=()
-    [ -n "${CACHE_FROM:-}" ] && CACHE_ARGS+=( --cache-from "$CACHE_FROM" )
-    [ -n "${CACHE_TO:-}"   ] && CACHE_ARGS+=( --cache-to   "$CACHE_TO"   )
+    if [ -n "${CACHE_FROM:-}" ]; then CACHE_ARGS+=( --cache-from "$CACHE_FROM" ); fi
+    if [ -n "${CACHE_TO:-}"   ]; then CACHE_ARGS+=( --cache-to   "$CACHE_TO"   ); fi
 }
 
 _core_sdk_sha() {
