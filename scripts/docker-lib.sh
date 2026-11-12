@@ -159,7 +159,7 @@ export_one() {
 
     local fmt pkg
     case "$pkg_suffix" in win-*) fmt="zip" ;; *) fmt="tar.gz" ;; esac
-    pkg="${APP_NAME}-${APP_VERSION}-${pkg_suffix}.${fmt}"
+    pkg="$(package_name "$pkg_suffix" "$sdk_platform" "$qt_major" "$fmt")"
     if [ "$fmt" = "zip" ]; then
         ( cd "$out_dir" && zip -qr "../$pkg" . )
     else
@@ -286,6 +286,11 @@ cmd_build() {
     export CORE_SDK_URL="${CORE_SDK_URL:-}"
     declare -f pre_export_shas >/dev/null && pre_export_shas
     docker compose -f docker-compose.build.yml build "$@"
+}
+
+package_name() {
+    local pkg_suffix="$1" sdk_platform="$2" qt_major="$3" fmt="$4"
+    echo "${APP_NAME}-${APP_VERSION}-${pkg_suffix}.${fmt}"
 }
 
 # ── dispatch ───────────────────────────────────────────────────────
