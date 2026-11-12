@@ -74,9 +74,25 @@ else
 fi
 
 # ── Идемпотентность ─────────────────────────────────────────────────────────
-if [ -f "$DEST/lib/cmake/Core/CoreConfig.cmake" ]; then
-    echo "Core SDK ${VERSION} (Qt${QT_MAJOR}) already at ${DEST}"
-    exit 0
+# Если SDK пришёл не через этот скрипт (например, забит в core-builder-*
+# через cmake --install), marker-файла нет — не доверяем, качаем заново.
+_sha_marker="$DEST/lib/cmake/Core/.sdk-sha256"
+
+if [ -n "${CORE_SDK_SHA256:-}" ]; then
+    _existing_sha="$(cat "$_sha_marker" 2>/dev/null || echo '')"
+    if [ -f "$DEST/lib/cmake/Core/CoreConfig.cmake" ] && [ "$_existing_sha" = "$CORE_SDK_SHA256" ]; then
+        echo "Core SDK ${VERSION} (Qt${QT_MAJOR}) at ${DEST} already matches sha ${CORE_SDK_SHA256}"
+        exit 0
+    fi
+    if [ -f "$DEST/lib/cmake/Core/CoreConfig.cmake" ] && [ -z "$_existing_sha" ]; then
+        echo "Core SDK ${VERSION} at ${DEST} has no SHA marker (baked into base image?) — re-fetching"
+    fi
+    # fall through к download
+else
+    if [ -f "$DEST/lib/cmake/Core/CoreConfig.cmake" ]; then
+        echo "Core SDK ${VERSION} (Qt${QT_MAJOR}) already at ${DEST}"
+        exit 0
+    fi
 fi
 
 mkdir -p "$DEST"
@@ -169,6 +185,11 @@ fi
 if [ ! -f "$DEST/lib/cmake/Core/CoreConfig.cmake" ]; then
     echo "ERROR: CoreConfig.cmake not found in ${DEST}" >&2
     exit 1
+fi
+
+# ── сохранение SHA ─────────────────────────────────
+if [ -n "${CORE_SDK_SHA256:-}" ]; then
+    echo "$CORE_SDK_SHA256" > "$DEST/lib/cmake/Core/.sdk-sha256"
 fi
 
 # ── Symlink latest (только если DEST авто) ─────────────────────────────────
