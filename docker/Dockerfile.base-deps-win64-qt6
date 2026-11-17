@@ -127,6 +127,32 @@ RUN git clone --branch ${QT6_VERSION} --depth 1 https://github.com/qt/qtmqtt.git
     cmake --install /tmp/qtmqtt/build && \
     rm -rf /tmp/qtmqtt
 
+# ── Xerces-C static (target win64) — порт старого win32-рецепта ──
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        autoconf automake libtool && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN cd /tmp && \
+    curl -fsSL -O https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-3.2.5.tar.gz && \
+    tar xzf xerces-c-3.2.5.tar.gz && \
+    cd xerces-c-3.2.5 && \
+    ./configure \
+        --host=x86_64-w64-mingw32 \
+        --prefix=/usr/x86_64-w64-mingw32 \
+        --disable-shared \
+        --enable-transcoder-windows \
+        --enable-xmlch-wchar_t \
+        --without-icu \
+        --disable-network \
+        CXXFLAGS="-static-libgcc -static-libstdc++ -O2 -fpermissive" && \
+    make -j"$(nproc)" && \
+    make install && \
+    rm -rf /tmp/xerces-c-3.2.5*
+
+RUN test -f /usr/x86_64-w64-mingw32/include/xercesc/util/XercesDefs.hpp && \
+    test -f /usr/x86_64-w64-mingw32/lib/libxerces-c.a && \
+    echo "OK: Xerces-C static x86_64-w64-mingw32 in sysroot"
+
 # ── SANITY CHECK ──
 RUN set -eu; \
     check() { \
