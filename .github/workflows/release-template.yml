@@ -67,11 +67,24 @@ jobs:
       qt5: ${{ steps.gen.outputs.qt5 }}
     steps:
       - id: gen
+        shell: bash
         run: |
-          qt6=$(printf '%s\n' "${{ inputs.platforms_qt6 }}" | jq -R -c 'split(" ")')
-          qt5=$(printf '%s\n' "${{ inputs.platforms_qt5 }}" | jq -R -c 'split(" ")')
+          gen() {
+            local v="$1"
+            # trim + пустая строка → []
+            v="$(echo "$v" | xargs)"
+            if [ -z "$v" ]; then
+              echo '[]'
+            else
+              printf '%s' "$v" | jq -R -c 'split(" ")'
+            fi
+          }
+          qt6="$(gen "${{ inputs.platforms_qt6 }}")"
+          qt5="$(gen "${{ inputs.platforms_qt5 }}")"
           echo "qt6=$qt6" >> "$GITHUB_OUTPUT"
           echo "qt5=$qt5" >> "$GITHUB_OUTPUT"
+          echo "qt6=$qt6"
+          echo "qt5=$qt5"
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -123,14 +136,14 @@ jobs:
           retention-days: 1
 
   test-qt6:
-    needs: verify
+    needs: [verify, matrix-gen]
     if: inputs.platforms_qt6 != ''
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: read }
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt6, ' ', '","'))) }}
+        platform: ${{ fromJSON(needs.matrix-gen.outputs.qt6) }}
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -184,14 +197,14 @@ jobs:
           retention-days: 1
 
   test-qt5:
-    needs: verify
+    needs: [verify, matrix-gen]
     if: inputs.platforms_qt5 != ''
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: read }
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt5, ' ', '","'))) }}
+        platform: ${{ fromJSON(needs.matrix-gen.outputs.qt5) }}
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
