@@ -159,6 +159,10 @@ export_one() {
 
     local fmt pkg
     case "$pkg_suffix" in win-*) fmt="zip" ;; *) fmt="tar.gz" ;; esac
+    case "$sdk_platform" in
+        win32|win64) fmt="zip" ;;
+        *)           fmt="tar.gz" ;;
+    esac
     pkg="$(package_name "$pkg_suffix" "$sdk_platform" "$qt_major" "$fmt")"
     if [ "$fmt" = "zip" ]; then
         ( cd "$out_dir" && zip -qr "../$pkg" . )
