@@ -271,6 +271,14 @@ cmd_test() {
         if [ -n "${CORE_SDK_URL:-}" ] && [[ "$CORE_SDK_URL" == http://host.docker.internal:* ]]; then
             targs+=( --add-host host.docker.internal:host-gateway )
         fi
+
+        # hooks: extra_build_args (saks: CORE_SDK_IMAGE)
+        local _extra
+        while IFS= read -r _extra; do
+            [ -z "$_extra" ] && continue
+            targs+=( --build-arg "$_extra" )
+        done < <(extra_build_args "$plat")
+
         _cache_args
         docker buildx build "${targs[@]}" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
         tested=$((tested+1))
