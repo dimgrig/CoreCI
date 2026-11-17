@@ -246,7 +246,11 @@ jobs:
         run: |
           mkdir -p release
           find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) ! -name 'Core-Releases*' -exec cp {} release/ \;
-           ls -la release/
+          if [ -z "$(ls -A release)" ]; then
+            echo "ERROR: No release artifacts found!" >&2
+            exit 1
+          fi
+          ls -la release/
 
       - name: SHA256SUMS
         run: |
@@ -269,14 +273,14 @@ jobs:
           name: ${{ inputs.release_title || inputs.app_name }} ${{ steps.tag.outputs.tag }}
           body: |
             ## ${{ inputs.release_title || inputs.app_name }} — ${{ steps.tag.outputs.tag }}
-            Core SDK `${{ env.CORE_SDK_VERSION }}`.
             Артефакты: см. ниже. Установка — `dpkg -i *.deb` (Linux) или `*.exe` (Windows).
+            Core SDK `${{ env.CORE_SDK_VERSION }}`.
           files: |
             release/*.tar.gz
             release/*.zip
             release/*.deb
             release/*.exe
             release/SHA256SUMS
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
