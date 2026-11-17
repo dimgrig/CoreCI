@@ -76,7 +76,7 @@ jobs:
             if [ -z "$v" ]; then
               echo '[]'
             else
-              printf '%s' "$v" | jq -R -c 'split(" ")'
+              printf '%s\n' "$v" | jq -R -c 'split(" ") | map(select(length > 0))'
             fi
           }
           qt6="$(gen "${{ inputs.platforms_qt6 }}")"
@@ -144,6 +144,8 @@ jobs:
       fail-fast: false
       matrix:
         platform: ${{ fromJSON(needs.matrix-gen.outputs.qt6) }}
+        exclude:
+          - platform: win-qt6
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -205,6 +207,8 @@ jobs:
       fail-fast: false
       matrix:
         platform: ${{ fromJSON(needs.matrix-gen.outputs.qt5) }}
+        exclude:
+          - platform: win-qt5
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -223,7 +227,11 @@ jobs:
 
   # ── publish ────────────────────────────────────────────────────
   publish:
-    if: inputs.publish_release
+    if: >-
+      always()
+      && inputs.publish_release
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
     needs: [verify, build-qt6, test-qt6, build-qt5, test-qt5]
     runs-on: ubuntu-latest
     permissions: { contents: write }
