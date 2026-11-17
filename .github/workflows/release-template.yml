@@ -1,0 +1,249 @@
+name: release-template
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+      release_title:
+        required: false
+        type: string
+        default: ''
+      core_sdk_version:
+        required: false
+        type: string
+        default: '1.1.0'
+      platforms_qt6:
+        required: false
+        type: string
+        default: 'linux-qt6 win-qt6'
+      platforms_qt5:
+        required: false
+        type: string
+        default: ''
+      upload_artifacts:
+        required: false
+        type: boolean
+        default: true
+      publish_release:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      token:
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  EXPORT_MODE: ci
+  OUT_DIR: ${{ github.workspace }}/dist
+  CORE_SDK_VERSION: ${{ inputs.core_sdk_version }}
+
+  CORE_BASE_DEPS_LINUX_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-linux:qt6-bookworm
+  CORE_BASE_DEPS_LINUX_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-linux:qt5-bookworm
+  CORE_BASE_DEPS_WIN64_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-win64:qt6-mingw
+  CORE_BASE_DEPS_WIN_QT5:    ghcr.io/${{ github.repository_owner }}/core-base-deps-win:qt5-mingw
+  CORE_BASE_DEPS_ARM64_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-arm64:qt6-bookworm-aqt
+  CORE_BASE_DEPS_ARM64_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-arm64:qt5-bookworm
+  CORE_BASE_DEPS_ARMV7_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-armv7:qt5-bullseye
+
+  # saks: core-builder-* переопределяет CORE_SDK_IMAGE (в CI = base-deps, без /opt/core)
+  CORE_BUILDER_LINUX_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-linux:qt6-bookworm
+  CORE_BUILDER_LINUX_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-linux:qt5-bookworm
+  CORE_BUILDER_WIN64_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-win64:qt6-mingw
+  CORE_BUILDER_WIN_QT5:    ghcr.io/${{ github.repository_owner }}/core-base-deps-win:qt5-mingw
+  CORE_BUILDER_ARM64_QT6:  ghcr.io/${{ github.repository_owner }}/core-base-deps-arm64:qt6-bookworm-aqt
+  CORE_BUILDER_ARM64_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-arm64:qt5-bookworm
+  CORE_BUILDER_ARMV7_QT5:  ghcr.io/${{ github.repository_owner }}/core-base-deps-armv7:qt5-bullseye
+
+  INNOSETUP_IMAGE: ghcr.io/${{ github.repository_owner }}/innosetup-base:latest
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - name: Verify VERSION == tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          FILE_VER="$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$TAG, VERSION=$FILE_VER"
+          if [ "v${FILE_VER}" != "${TAG}" ]; then
+            echo "ERROR: tag '${TAG}' does not match VERSION '${FILE_VER}'" >&2
+            exit 1
+          fi
+
+  # ── Qt6 (always) ───────────────────────────────────────────────
+  build-qt6:
+    needs: verify
+    if: inputs.platforms_qt6 != ''
+    runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions: { contents: read, packages: read }
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt6, ' ', '","'))) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: docker/setup-qemu-action@v3
+        if: contains(matrix.platform, 'arm')
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.token }}
+      - name: Build & export (${{ matrix.platform }})
+        env:
+          PLATFORMS: ${{ matrix.platform }}
+          CACHE_FROM: type=gha,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+          CACHE_TO:   type=gha,mode=max,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+        run: ./docker.sh export
+      - uses: actions/upload-artifact@v4
+        if: inputs.upload_artifacts
+        with:
+          name: sdk-${{ inputs.app_name }}-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  test-qt6:
+    needs: verify
+    if: inputs.platforms_qt6 != ''
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: read }
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt6, ' ', '","'))) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.token }}
+      - name: Run ctest (${{ matrix.platform }})
+        env:
+          PLATFORMS: ${{ matrix.platform }}
+          QT6_INSTALL_PREFIX: /opt/Qt/6.8.0/gcc_64
+          CACHE_FROM: type=gha,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+          CACHE_TO:   type=gha,mode=max,scope=${{ inputs.app_name }}-${{ matrix.platform }}-test
+        run: ./docker.sh test
+
+  # ── Qt5 (opt-in) ───────────────────────────────────────────────
+  build-qt5:
+    needs: verify
+    if: inputs.platforms_qt5 != ''
+    runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions: { contents: read, packages: read }
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt5, ' ', '","'))) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: docker/setup-qemu-action@v3
+        if: contains(matrix.platform, 'arm')
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.token }}
+      - name: Build & export (${{ matrix.platform }})
+        env:
+          PLATFORMS: ${{ matrix.platform }}
+          CACHE_FROM: type=gha,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+          CACHE_TO:   type=gha,mode=max,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+        run: ./docker.sh export
+      - uses: actions/upload-artifact@v4
+        if: inputs.upload_artifacts
+        with:
+          name: sdk-${{ inputs.app_name }}-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  test-qt5:
+    needs: verify
+    if: inputs.platforms_qt5 != ''
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: read }
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt5, ' ', '","'))) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.token }}
+      - name: Run ctest (${{ matrix.platform }})
+        env:
+          PLATFORMS: ${{ matrix.platform }}
+          CACHE_FROM: type=gha,scope=${{ inputs.app_name }}-${{ matrix.platform }}
+          CACHE_TO:   type=gha,mode=max,scope=${{ inputs.app_name }}-${{ matrix.platform }}-test
+        run: ./docker.sh test
+
+  # ── publish ────────────────────────────────────────────────────
+  publish:
+    if: inputs.publish_release
+    needs: [verify, build-qt6, test-qt6, build-qt5, test-qt5]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: SHA256SUMS
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ inputs.release_title || inputs.app_name }} ${{ steps.tag.outputs.tag }}
+          body: |
+            ## ${{ inputs.release_title || inputs.app_name }} — ${{ steps.tag.outputs.tag }}
+            Core SDK `${{ env.CORE_SDK_VERSION }}`.
+            Артефакты: см. ниже. Установка — `dpkg -i *.deb` (Linux) или `*.exe` (Windows).
+          files: |
+            release/*.tar.gz
+            release/*.zip
+            release/*.deb
+            release/*.exe
+            release/SHA256SUMS
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
