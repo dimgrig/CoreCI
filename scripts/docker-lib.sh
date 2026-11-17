@@ -250,7 +250,7 @@ cmd_test() {
 
     for plat in "${_plats[@]}"; do
         case "$plat" in
-            linux-qt6|linux-qt5) ;;
+            linux-qt6*|linux-qt5*) ;;
             *) echo "NOTE: test supports only linux-qt5/linux-qt6, skipping '$plat'"; continue ;;
         esac
         spec="${PLATFORMS[$plat]:-}"
