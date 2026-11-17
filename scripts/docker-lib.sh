@@ -155,6 +155,18 @@ export_one() {
     fi
 
     _cache_args
+
+    # 1. Формируем имя тега (как в docker-compose.build.yml) и обновляем локальный образ
+    local plat_tag="${sdk_platform}"
+    plat_tag="${plat_tag/linux-amd64/linux}"
+    plat_tag="${plat_tag/linux-arm/arm}"
+    local image_tag="${APP_NAME}-builder-cmake-${plat_tag}-qt${qt_major}:latest"
+    [ "$qt_major" = "5" ] && image_tag="${image_tag/-qt5/}"
+
+    docker buildx build "${bargs[@]}" --load -t "$image_tag" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
+
+    # 2. Выгружаем готовые артефакты на диск (из кеша выполнится мгновенно)
+    bargs+=( --target export --output "type=local,dest=${out_dir}" )
     docker buildx build "${bargs[@]}" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
 
     local fmt pkg
