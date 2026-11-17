@@ -60,6 +60,18 @@ env:
   INNOSETUP_IMAGE: ghcr.io/${{ github.repository_owner }}/innosetup-base:latest
 
 jobs:
+  matrix-gen:
+    runs-on: ubuntu-latest
+    outputs:
+      qt6: ${{ steps.gen.outputs.qt6 }}
+      qt5: ${{ steps.gen.outputs.qt5 }}
+    steps:
+      - id: gen
+        run: |
+          qt6=$(printf '%s\n' "${{ inputs.platforms_qt6 }}" | jq -R -c 'split(" ")')
+          qt5=$(printf '%s\n' "${{ inputs.platforms_qt5 }}" | jq -R -c 'split(" ")')
+          echo "qt6=$qt6" >> "$GITHUB_OUTPUT"
+          echo "qt5=$qt5" >> "$GITHUB_OUTPUT"
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -77,14 +89,14 @@ jobs:
 
   # ── Qt6 (always) ───────────────────────────────────────────────
   build-qt6:
-    needs: verify
+    needs: [verify, matrix-gen]
     if: inputs.platforms_qt6 != ''
     runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions: { contents: read, packages: read }
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt6, ' ', '","'))) }}
+        platform: ${{ fromJSON(needs.matrix-gen.outputs.qt6) }}
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -138,14 +150,14 @@ jobs:
 
   # ── Qt5 (opt-in) ───────────────────────────────────────────────
   build-qt5:
-    needs: verify
+    needs: [verify, matrix-gen]
     if: inputs.platforms_qt5 != ''
     runs-on: ${{ contains(matrix.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions: { contents: read, packages: read }
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(format('["{0}"]', replace(inputs.platforms_qt5, ' ', '","'))) }}
+        platform: ${{ fromJSON(needs.matrix-gen.outputs.qt5) }}
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
