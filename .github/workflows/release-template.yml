@@ -245,8 +245,8 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) -exec cp {} release/ \;
-          ls -la release/
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) ! -name 'Core-Releases*' -exec cp {} release/ \;
+           ls -la release/
 
       - name: SHA256SUMS
         run: |
