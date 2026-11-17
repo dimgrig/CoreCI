@@ -297,7 +297,22 @@ cmd_build() {
     export CORE_SDK_VERSION="$(_core_sdk_version)"
     export CORE_SDK_URL="${CORE_SDK_URL:-}"
     declare -f pre_export_shas >/dev/null && pre_export_shas
-    docker compose -f docker-compose.build.yml build "$@"
+
+    local services=()
+    local has_explicit_service=0
+    for arg in "$@"; do
+        [[ "$arg" != -* ]] && has_explicit_service=1
+    done
+
+    if [ "$has_explicit_service" -eq 0 ] && [ -n "${PLATFORMS_LIST:-}" ]; then
+        local plat
+        read -ra _plats <<< "$PLATFORMS_LIST"
+        for plat in "${_plats[@]}"; do
+            services+=("${APP_NAME}-${plat}")
+        done
+    fi
+
+    docker compose -f docker-compose.build.yml build "$@" "${services[@]}"
 }
 
 package_name() {
