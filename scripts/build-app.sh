@@ -63,7 +63,7 @@ ${CMAKE_CMD} -S . -B build \
 ${CMAKE_CMD} --build build -j"$(nproc)"
 ${CMAKE_CMD} --install build
 
-if ! ls "${DEST}/bin/${APP_NAME}" "${DEST}/bin/${APP_NAME}.exe" >/dev/null 2>&1; then
+if [ ! -f "${DEST}/bin/${APP_NAME}" ] && [ ! -f "${DEST}/bin/${APP_NAME}.exe" ]; then
     echo "build-app: FATAL: ${APP_NAME}{,.exe} not in ${DEST}/bin/" >&2
     ls -la "${DEST}/bin/" 2>/dev/null || true
     exit 1

@@ -151,7 +151,7 @@ fi
 if ! ls "${DIST}/lib/libQt${QT_VERSION_MAJOR}Core.so"* >/dev/null 2>&1; then
     echo "deploy-linux: FATAL: libQt${QT_VERSION_MAJOR}Core not in bundle" >&2; _err=1
 fi
-if ! ls "${DIST}/bin/${APP_NAME_BIN}" "${DIST}/${APP_NAME_BIN}" >/dev/null 2>&1; then
+if [ ! -f "${DIST}/bin/${APP_NAME_BIN}" ] && [ ! -f "${DIST}/${APP_NAME_BIN}" ]; then
     echo "deploy-linux: FATAL: ${APP_NAME_BIN} not in bundle" >&2; _err=1
 fi
 if [ ! -f "${DIST}/plugins/platforms/libqxcb.so" ]; then
