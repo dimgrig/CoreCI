@@ -83,13 +83,14 @@ fi
 for dll in libstdc++-6.dll libwinpthread-1.dll; do
     src=""
     for cand in \
-        "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/$dll}" \
+        "${GCC_DIR}/$dll" \
+        "${SYSROOT}/bin/$dll" \
+        "${SYSROOT}/lib/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/13-posix/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/12-posix/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/13-win32/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/12-win32/$dll" \
-        "${SYSROOT}/bin/$dll" \
-        "${SYSROOT}/lib/$dll"; do
+        "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/$dll}"; do
         [ -n "$cand" ] && [ -f "$cand" ] && { src="$cand"; break; }
     done
     [ -n "$src" ] || { echo "deploy-windows: FATAL: $dll not found" >&2; exit 1; }
@@ -101,12 +102,13 @@ done
 
 libgcc_src=""
 for cand in \
-    "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll}" \
+    "${GCC_DIR}/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
+    "${SYSROOT}/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/13-posix/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/12-posix/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/13-win32/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/12-win32/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
-    "${SYSROOT}/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll"; do
+    "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll}"; do
     [ -n "$cand" ] && [ -f "$cand" ] && { libgcc_src="$cand"; break; }
 done
 [ -n "$libgcc_src" ] || { echo "deploy-windows: FATAL: libgcc_s_${MINGW_GCC_SUFFIX}.dll not found" >&2; exit 1; }
