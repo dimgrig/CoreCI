@@ -106,7 +106,8 @@ for pat in 'libicu*.so*' 'libssl.so*' 'libcrypto*.so*' \
            'libpcre2-16.so*' 'libpcre2-8.so*' \
            'libzstd.so*' 'libdouble-conversion.so*' \
            'libmd4c.so*' 'libb2.so*'; do
-    cp -d "${QT_LIBDIR}/"${pat} "${DIST}/lib/" 2>/dev/null || true
+    cp -d "${QT_LIBDIR}/"${pat} "${DIST}/lib/" 2>/dev/null || \
+    cp -d "/usr/lib/${ARCH_TRIPLET}/"${pat} "${DIST}/lib/" 2>/dev/null || true
 done
 
 # Плагины
