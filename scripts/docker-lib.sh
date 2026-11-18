@@ -148,6 +148,7 @@ export_one() {
     done < <(extra_build_args "$plat")
 
     bargs+=( --target export --output "type=local,dest=${out_dir}" )
+        # Убираем --target export --output из общих bargs (оставляем их только для шага выгрузки)
     [ -n "$buildx_platform" ] && bargs+=( --platform "$buildx_platform" )
 
     if [ -n "${CORE_SDK_URL:-}" ] && [[ "$CORE_SDK_URL" == http://host.docker.internal:* ]]; then
@@ -156,14 +157,21 @@ export_one() {
 
     _cache_args
 
-    # 1. Формируем имя тега (как в docker-compose.build.yml) и обновляем локальный образ
+    # 1. Обновляем локальный образ (стадия final)
     local plat_tag="${sdk_platform}"
     plat_tag="${plat_tag/linux-amd64/linux}"
     plat_tag="${plat_tag/linux-arm/arm}"
     local image_tag="${APP_NAME}-builder-cmake-${plat_tag}-qt${qt_major}:latest"
     [ "$qt_major" = "5" ] && image_tag="${image_tag/-qt5/}"
 
-    docker buildx build "${bargs[@]}" --load -t "$image_tag" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
+    docker buildx build "${bargs[@]}" --target final --load -t "$image_tag" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
+
+    # 2. Выгружаем готовые артефакты на диск в зависимости от режима (dev или ci)
+    local export_target="export"
+    [ "${EXPORT_MODE:-ci}" = "dev" ] && export_target="export-dev"
+
+    docker buildx build "${bargs[@]}" --target "${export_target}" --output "type=local,dest=${out_dir}" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
+
 
     # 2. Выгружаем готовые артефакты на диск (из кеша выполнится мгновенно)
     bargs+=( --target export --output "type=local,dest=${out_dir}" )
