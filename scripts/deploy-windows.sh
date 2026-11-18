@@ -79,6 +79,10 @@ else
     done
 fi
 
+# Каталог runtime того самого компилятора, которым собраны exe и наши DLL
+GCC_DIR="$(dirname "$(${MINGW_TRIPLET}-g++ -print-libgcc-file-name)")"
+echo "deploy-windows: compiler runtime dir = ${GCC_DIR}"
+
 # MinGW runtime (явно, с проверкой PEI)
 for dll in libstdc++-6.dll libwinpthread-1.dll; do
     src=""
