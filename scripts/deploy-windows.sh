@@ -114,6 +114,7 @@ done
 [ -n "$libgcc_src" ] || { echo "deploy-windows: FATAL: libgcc_s_${MINGW_GCC_SUFFIX}.dll not found" >&2; exit 1; }
 cp -a "$libgcc_src" "${DIST}/"
 
+
 # Transitive closure через objdump -p
 declare -A seen=()
 queue=("${DIST}/${APP_NAME_BIN}.exe")
