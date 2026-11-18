@@ -146,6 +146,7 @@ jobs:
         platform: ${{ fromJSON(needs.matrix-gen.outputs.qt6) }}
         exclude:
           - platform: win-qt6
+          - platform: arm64-qt6
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -209,6 +210,8 @@ jobs:
         platform: ${{ fromJSON(needs.matrix-gen.outputs.qt5) }}
         exclude:
           - platform: win-qt5
+          - platform: arm64-qt5
+          - platform: armv7-qt5
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
@@ -245,9 +248,18 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release
-          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) ! -name 'Core-Releases*' -exec cp {} release/ \;
+          if [ "${{ inputs.app_name }}" = "core" ]; then
+            # Core SDK: именно Core-Releases-* — это и есть артефакты релиза.
+            find dist -type f \( -name 'Core-Releases-*.tar.gz' -o -name 'Core-Releases-*.zip' \) \
+              -exec cp {} release/ \;
+          else
+            # Приложения: их артефакты + .deb/.exe; Core-Releases-* не тащим.
+            find dist -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' -o -name '*.exe' \) \
+              ! -name 'Core-Releases*' -exec cp {} release/ \;
+          fi
           if [ -z "$(ls -A release)" ]; then
             echo "ERROR: No release artifacts found!" >&2
+            ls -la dist/ 2>/dev/null || true
             exit 1
           fi
           ls -la release/
