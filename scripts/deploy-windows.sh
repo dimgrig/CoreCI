@@ -1,4 +1,4 @@
-#!/bin/sh
+##!/bin/bash
 # CoreCI/scripts/deploy-windows.sh — DLL copy + MinGW runtime + transitive closure.
 #
 # Env (обязательные):
