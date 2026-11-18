@@ -83,13 +83,14 @@ fi
 for dll in libstdc++-6.dll libwinpthread-1.dll; do
     src=""
     for cand in \
+        "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/$dll}" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/13-posix/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/12-posix/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/13-win32/$dll" \
         "/usr/lib/gcc/${MINGW_TRIPLET}/12-win32/$dll" \
         "${SYSROOT}/bin/$dll" \
         "${SYSROOT}/lib/$dll"; do
-        [ -f "$cand" ] && { src="$cand"; break; }
+        [ -n "$cand" ] && [ -f "$cand" ] && { src="$cand"; break; }
     done
     [ -n "$src" ] || { echo "deploy-windows: FATAL: $dll not found" >&2; exit 1; }
     if ! ${MINGW_TRIPLET}-objdump -f "$src" 2>/dev/null | grep -q "${MINGW_PEI}"; then
@@ -100,12 +101,13 @@ done
 
 libgcc_src=""
 for cand in \
+    "${QT6_INSTALL_PREFIX:+$QT6_INSTALL_PREFIX/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll}" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/13-posix/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/12-posix/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/13-win32/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "/usr/lib/gcc/${MINGW_TRIPLET}/12-win32/libgcc_s_${MINGW_GCC_SUFFIX}.dll" \
     "${SYSROOT}/bin/libgcc_s_${MINGW_GCC_SUFFIX}.dll"; do
-    [ -f "$cand" ] && { libgcc_src="$cand"; break; }
+    [ -n "$cand" ] && [ -f "$cand" ] && { libgcc_src="$cand"; break; }
 done
 [ -n "$libgcc_src" ] || { echo "deploy-windows: FATAL: libgcc_s_${MINGW_GCC_SUFFIX}.dll not found" >&2; exit 1; }
 cp -a "$libgcc_src" "${DIST}/"
