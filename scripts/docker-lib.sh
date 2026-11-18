@@ -147,9 +147,8 @@ export_one() {
         bargs+=( --build-arg "$_extra" )
     done < <(extra_build_args "$plat")
 
-    bargs+=( --target export --output "type=local,dest=${out_dir}" )
-        # Убираем --target export --output из общих bargs (оставляем их только для шага выгрузки)
-     [ -n "$buildx_platform" ] && bargs+=( --platform "$buildx_platform" )
+    # Убираем --target export --output из общих bargs (оставляем их только для шага выгрузки)
+    [ -n "$buildx_platform" ] && bargs+=( --platform "$buildx_platform" )
 
     if [ -n "${CORE_SDK_URL:-}" ] && [[ "$CORE_SDK_URL" == http://host.docker.internal:* ]]; then
      bargs+=( --add-host host.docker.internal:host-gateway )
