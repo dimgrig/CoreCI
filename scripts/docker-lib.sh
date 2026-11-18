@@ -149,10 +149,10 @@ export_one() {
 
     bargs+=( --target export --output "type=local,dest=${out_dir}" )
         # Убираем --target export --output из общих bargs (оставляем их только для шага выгрузки)
-    [ -n "$buildx_platform" ] && bargs+=( --platform "$buildx_platform" )
+     [ -n "$buildx_platform" ] && bargs+=( --platform "$buildx_platform" )
 
     if [ -n "${CORE_SDK_URL:-}" ] && [[ "$CORE_SDK_URL" == http://host.docker.internal:* ]]; then
-        bargs+=( --add-host host.docker.internal:host-gateway )
+     bargs+=( --add-host host.docker.internal:host-gateway )
     fi
 
     _cache_args
@@ -172,13 +172,9 @@ export_one() {
 
     docker buildx build "${bargs[@]}" --target "${export_target}" --output "type=local,dest=${out_dir}" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
 
-
-    # 2. Выгружаем готовые артефакты на диск (из кеша выполнится мгновенно)
-    bargs+=( --target export --output "type=local,dest=${out_dir}" )
-    docker buildx build "${bargs[@]}" "${CACHE_ARGS[@]}" -f "$dockerfile" "$APP_ROOT"
-
     local fmt pkg
     case "$pkg_suffix" in win-*) fmt="zip" ;; *) fmt="tar.gz" ;; esac
+
     case "$sdk_platform" in
         win32|win64) fmt="zip" ;;
         *)           fmt="tar.gz" ;;
