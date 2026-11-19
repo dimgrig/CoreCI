@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+FROM stateoftheartio/qt6:6.8-wasm-aqt AS base
+
+# Устанавливаем дополнительные утилиты, необходимые для CI/CD, 
+# упаковки артефактов и (опционально) запуска wasm-тестов
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt update && \
+    apt install -y --no-install-recommends \
+        build-essential \
+        qt5-qmake qtbase5-dev qtbase5-private-dev \
+        qtdeclarative5-dev libqt5quick5 libqt5quickwidgets5 \
+        qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts \
+        qttools5-dev-tools qtquickcontrols2-5-dev \
+        qtwebengine5-dev libqt5webenginewidgets5 \
+        libqt5serialbus5-dev libqt5serialport5-dev \
+        zip wget git ca-certificates curl \
+        nodejs \
+    && rm -rf /var/lib/apt/lists/*    
+
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+# Проверяем, что Qt действительно доступен по ожидаемому пути
+RUN test -d /opt/Qt/6.8.0/wasm_32 && echo "Qt 6.8 Wasm found" || (echo "Qt 6.8 Wasm NOT found" && exit 1)

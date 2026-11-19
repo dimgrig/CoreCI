@@ -81,6 +81,14 @@ jobs:
             platforms: linux/arm/v7
             extra_build_args: ''
 
+          - name:     wasm-qt6
+            dockerfile: Dockerfile.base-deps-wasm-qt6
+            image:    core-base-deps-wasm
+            tag:      qt6-wasm
+            runner:   ubuntu-latest
+            platforms: linux/amd64
+            extra_build_args: ''
+
     steps:
       - uses: actions/checkout@v4
 
