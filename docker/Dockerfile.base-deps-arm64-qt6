@@ -59,6 +59,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 ENV QT6_INSTALL_PREFIX=/opt/Qt/${QT6_VERSION}/gcc_arm64
+ENV CUPS_INCLUDE_DIR=/usr/include \
+    CUPS_LIBRARIES=/usr/lib/aarch64-linux-gnu/libcups.so
 
 # Qt5 (dev, для Qt5-сборок и CQtDeployer) + build-инструменты.
 # Qt6 dev-хедеры и cmake-конфиги УЖЕ в /opt/Qt (из qt68-image).
@@ -120,6 +122,11 @@ RUN set -eu; \
     check /usr/include/openssl/ssl.h; \
     check /usr/include/sqlite3.h; \
     check /usr/include/libudev.h; \
+    # ── Реальная проверка find_package(Qt6 PrintSupport) через CMake ──
+    mkdir -p /tmp/sanity-qt6 && \
+    printf 'cmake_minimum_required(VERSION 3.16)\nproject(sanity)\nfind_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets PrintSupport Core5Compat)\n' > /tmp/sanity-qt6/CMakeLists.txt && \
+    cmake -S /tmp/sanity-qt6 -B /tmp/sanity-qt6/build -DCMAKE_PREFIX_PATH="$QT" >/dev/null && \
+    rm -rf /tmp/sanity-qt6; \
     # ── Никаких @GLIBC_2.38+ ──
     if readelf --dyn-syms "$QT"/lib/libQt6*.so.6* 2>/dev/null \
          | grep -qE "@GLIBC_2\.(3[89]|4[0-9])"; then \
