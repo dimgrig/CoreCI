@@ -147,6 +147,7 @@ jobs:
         exclude:
           - platform: win-qt6
           - platform: arm64-qt6
+          - platform: wasm-qt6
     steps:
       - uses: actions/checkout@v4
         with: { submodules: recursive }
