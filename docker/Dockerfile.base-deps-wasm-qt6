@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 FROM stateoftheartio/qt6:6.8-wasm-aqt AS base
 
+USER root
+
 # Устанавливаем дополнительные утилиты, необходимые для CI/CD, 
 # упаковки артефактов и (опционально) запуска wasm-тестов
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -8,17 +10,89 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt update && \
     apt install -y --no-install-recommends \
         build-essential \
-        qt5-qmake qtbase5-dev qtbase5-private-dev \
-        qtdeclarative5-dev libqt5quick5 libqt5quickwidgets5 \
-        qml-module-qtquick2 qml-module-qtquick-controls2 qml-module-qtquick-layouts \
-        qttools5-dev-tools qtquickcontrols2-5-dev \
-        qtwebengine5-dev libqt5webenginewidgets5 \
-        libqt5serialbus5-dev libqt5serialport5-dev \
         zip wget git ca-certificates curl \
         nodejs \
     && rm -rf /var/lib/apt/lists/*    
 
+# Проверяем наличие qt5compat и qtscxml (StateMachine); если нет — ставим aqtinstall и докачиваем
+# 1. Ставим системные пакеты для Python (закэшируется)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-pip python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Обновляем pip и ставим aqtinstall с совместимыми для Python 3.8 зависимостями (закэшируется)
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir "typing_extensions==4.12.2" "beautifulsoup4==4.12.3" aqtinstall
+
+# 3. Докачиваем недостающие модули Qt (если их еще нет в образе)
+#RUN set -e; \
+#    QP="/opt/Qt/6.8.1/wasm_singlethread"; \
+#    if [ ! -d "$QP/lib/cmake/Qt6Core5Compat" ] || [ ! -d "$QP/lib/cmake/Qt6StateMachine" ]; then \
+#        aqt install-qt linux desktop 6.8.1 wasm_singlethread -m qt5compat qtscxml -O /opt/Qt; \
+#    else \
+#        echo "Qt6Core5Compat and Qt6StateMachine are already installed"; \
+#    fi
+
+# ── Дособираем недостающие модули Qt 6.8.1 (qt5compat, qtscxml, qtmqtt) под Wasm ──
+# ── 1. Проверка путей и прав на qt-cmake (закэшируется) ──
+RUN chmod +x /opt/Qt/6.8.1/wasm_singlethread/bin/qt-cmake && \
+    test -d /opt/Qt/6.8.1/gcc_64
+
+# ── 1. Сборка и установка qtmqtt (закэшируется) ──
+RUN /bin/bash -c 'set -e; \
+    [ -f /opt/emsdk/emsdk_env.sh ] && cd /opt/emsdk && source ./emsdk_env.sh; \
+    QP="/opt/Qt/6.8.1/wasm_singlethread"; \
+    git clone --branch 6.8.1 --depth 1 https://github.com/qt/qtmqtt.git /tmp/qtmqtt; \
+    "$QP/bin/qt-cmake" -S /tmp/qtmqtt -B /tmp/qtmqtt/build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DQT_HOST_PATH=/opt/Qt/6.8.1/gcc_64 \
+        -DCMAKE_INSTALL_PREFIX="$QP" \
+        -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=OFF; \
+    cmake --build /tmp/qtmqtt/build -j"$(nproc)"; \
+    cmake --install /tmp/qtmqtt/build; \
+    rm -rf /tmp/qtmqtt; \
+    ls -la "$QP/lib/libQt6Mqtt.a"'
+
+# ── 2. Сборка и установка qt5compat (только Core5Compat, без QML GraphicalEffects) ──
+RUN /bin/bash -c 'set -e; \
+    [ -f /opt/emsdk/emsdk_env.sh ] && cd /opt/emsdk && source ./emsdk_env.sh; \
+    QP="/opt/Qt/6.8.1/wasm_singlethread"; \
+    git clone --branch 6.8.1 --depth 1 https://github.com/qt/qt5compat /tmp/qt5compat; \
+    : > /tmp/qt5compat/src/imports/CMakeLists.txt; \
+    "$QP/bin/qt-cmake" -S /tmp/qt5compat -B /tmp/qt5compat/build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DQT_HOST_PATH=/opt/Qt/6.8.1/gcc_64 \
+        -DCMAKE_INSTALL_PREFIX="$QP" \
+        -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=OFF; \
+    cmake --build /tmp/qt5compat/build -j"$(nproc)"; \
+    cmake --install /tmp/qt5compat/build; \
+    rm -rf /tmp/qt5compat; \
+    ls -la "$QP/lib/libQt6Core5Compat.a"'
+
+# ── 3. Сборка и установка qtscxml / StateMachine (без tools/qscxmlc) ──
+RUN /bin/bash -c 'set -e; \
+    [ -f /opt/emsdk/emsdk_env.sh ] && cd /opt/emsdk && source ./emsdk_env.sh; \
+    QP="/opt/Qt/6.8.1/wasm_singlethread"; \
+    git clone --branch 6.8.1 --depth 1 https://github.com/qt/qtscxml /tmp/qtscxml; \
+    : > /tmp/qtscxml/tools/CMakeLists.txt; \
+    "$QP/bin/qt-cmake" -S /tmp/qtscxml -B /tmp/qtscxml/build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DQT_HOST_PATH=/opt/Qt/6.8.1/gcc_64 \
+        -DCMAKE_INSTALL_PREFIX="$QP" \
+        -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=OFF; \
+    cmake --build /tmp/qtscxml/build -j"$(nproc)"; \
+    cmake --install /tmp/qtscxml/build; \
+    rm -rf /tmp/qtscxml; \
+    ls -la "$QP/lib/libQt6StateMachine.a"'
+
+
+
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 # Проверяем, что Qt действительно доступен по ожидаемому пути
-RUN test -d /opt/Qt/6.8.0/wasm_32 && echo "Qt 6.8 Wasm found" || (echo "Qt 6.8 Wasm NOT found" && exit 1)
+#RUN find / -name "qt-cmake" 2>/dev/null | grep wasm
+RUN test -f /opt/Qt/6.8.1/wasm_singlethread/bin/qt-cmake \
+    && echo "Qt 6.8.1 Wasm found" \
+    || (echo "Qt 6.8.1 Wasm NOT found" && exit 1)
+
+RUN which emcc && emcc --version    

@@ -46,6 +46,9 @@ docker buildx build --platform linux/arm64 \
     -t base-deps-arm64-qt6:latest \
     -f docker/Dockerfile.base-deps-arm64-qt6 .
 
+echo "=== base-deps-wasm-qt6:latest ==="
+docker build -t base-deps-wasm-qt6:latest -f docker/Dockerfile.base-deps-wasm-qt6 .
+
 if [ "${BUILD_ASTRA:-0}" = "1" ]; then
     echo "=== base-deps-astra:latest ==="
     echo "NOTE: Dockerfile.base-deps-astra остаётся в Core/ (TODO: вынести в CoreCI)."
