@@ -163,6 +163,13 @@ while [ ${#queue[@]} -gt 0 ]; do
     done
 done
 
+# ── appinfo в DK (для консистентности с linux-DK и на случай WSL) ──
+_prefix="${CORE_INSTALL_BASE:-/opt/rv}/qt${QT_VERSION_MAJOR}/${V}"
+if [ -f "${_prefix}/appinfo.env" ]; then
+    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo.env"
+    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo"
+fi
+
 # Sanity
 _err=0
 test -f "${DIST}/${APP_NAME_BIN}.exe" || { echo "deploy-windows: FATAL: ${APP_NAME_BIN}.exe missing" >&2; _err=1; }

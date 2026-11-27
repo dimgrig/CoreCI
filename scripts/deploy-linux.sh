@@ -144,6 +144,18 @@ rm -f "${DIST}/lib/"libicuio.so* \
       "${DIST}/lib/"libicutest.so* \
       "${DIST}/lib/"libicutu.so*
 
+# ── appinfo для DistributionKit (install_*.sh делают source appinfo) ──
+# appinfo.env/`appinfo` уже установлены CMake в /opt/rv/qt6/<ver>/
+_prefix="${CORE_INSTALL_BASE:-/opt/rv}/qt${QT_VERSION_MAJOR}/${V}"
+if [ -f "${_prefix}/appinfo.env" ]; then
+    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo.env"
+    # legacy имя без расширения (его ждут install_*.sh / DistributionKit)
+    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo"
+fi
+if [ -f "${_prefix}/appinfo" ]; then
+    cp -f "${_prefix}/appinfo" "${DK_ROOT}/appinfo"
+fi
+
 # Sanity
 _err=0
 if ls "${DIST}/lib/libc.so"* 2>/dev/null; then
