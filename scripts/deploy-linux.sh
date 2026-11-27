@@ -144,16 +144,17 @@ rm -f "${DIST}/lib/"libicuio.so* \
       "${DIST}/lib/"libicutest.so* \
       "${DIST}/lib/"libicutu.so*
 
-# ── appinfo для DistributionKit (install_*.sh делают source appinfo) ──
-# appinfo.env/`appinfo` уже установлены CMake в /opt/rv/qt6/<ver>/
-_prefix="${CORE_INSTALL_BASE:-/opt/rv}/qt${QT_VERSION_MAJOR}/${V}"
-if [ -f "${_prefix}/appinfo.env" ]; then
-    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo.env"
-    # legacy имя без расширения (его ждут install_*.sh / DistributionKit)
-    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo"
+# ── appinfo в DistributionKit ──
+# install_desktop.sh / install_run.sh / uninstall_*.sh делают `source appinfo`.
+# LOCAL_INSTALL уже передан из Dockerfile (= /opt/rv/qt6/<ver>).
+_dk_root="${DEPLOY_DIR}/${DIST_NAME}"
+_prefix="${LOCAL_INSTALL:-}"
+if [ -n "${_prefix}" ] && [ -f "${_prefix}/appinfo.env" ]; then
+    cp -f "${_prefix}/appinfo.env" "${_dk_root}/appinfo.env"
+    cp -f "${_prefix}/appinfo.env" "${_dk_root}/appinfo"
 fi
-if [ -f "${_prefix}/appinfo" ]; then
-    cp -f "${_prefix}/appinfo" "${DK_ROOT}/appinfo"
+if [ -n "${_prefix}" ] && [ -f "${_prefix}/appinfo" ]; then
+    cp -f "${_prefix}/appinfo" "${_dk_root}/appinfo"
 fi
 
 # Sanity

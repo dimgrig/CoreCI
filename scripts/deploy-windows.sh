@@ -163,11 +163,15 @@ while [ ${#queue[@]} -gt 0 ]; do
     done
 done
 
-# ── appinfo в DK (для консистентности с linux-DK и на случай WSL) ──
-_prefix="${CORE_INSTALL_BASE:-/opt/rv}/qt${QT_VERSION_MAJOR}/${V}"
-if [ -f "${_prefix}/appinfo.env" ]; then
-    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo.env"
-    cp -f "${_prefix}/appinfo.env" "${DK_ROOT}/appinfo"
+# ── appinfo в DistributionKit ──
+_dk_root="${DEPLOY_DIR}/${DIST_NAME}"
+_prefix="${LOCAL_INSTALL:-}"
+if [ -n "${_prefix}" ] && [ -f "${_prefix}/appinfo.env" ]; then
+    cp -f "${_prefix}/appinfo.env" "${_dk_root}/appinfo.env"
+    cp -f "${_prefix}/appinfo.env" "${_dk_root}/appinfo"
+fi
+if [ -n "${_prefix}" ] && [ -f "${_prefix}/appinfo" ]; then
+    cp -f "${_prefix}/appinfo" "${_dk_root}/appinfo"
 fi
 
 # Sanity
