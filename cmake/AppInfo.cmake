@@ -42,5 +42,11 @@ function(core_write_appinfo)
 
     file(WRITE "${ARG_OUTPUT}" "${_content}")
     install(FILES "${ARG_OUTPUT}" DESTINATION "${ARG_INSTALL_DIR}")
+
+    if(ARG_LEGACY_NAME)
+        install(FILES "${ARG_OUTPUT}" DESTINATION "${ARG_INSTALL_DIR}"
+                RENAME "${ARG_LEGACY_NAME}")
+    endif()
+    
     message(STATUS "AppInfo: ${ARG_OUTPUT} (version ${PROJECT_VERSION})")
 endfunction()

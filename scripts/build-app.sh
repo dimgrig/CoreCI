@@ -48,6 +48,14 @@ fi
 
 mkdir -p "${CORE_INSTALL_BASE}/qt${QT_VERSION_MAJOR}"
 
+# ── appinfo: проброс ENV → CMake (используется core_write_appinfo) ──
+for _v in APP_NAME_RU APP_NAME_EN APP_NAME_BIN ICON_NAME; do
+    eval "_val=\${$_v:-}"
+    if [ -n "${_val}" ]; then
+        CMAKE_EXTRA_ARGS="${CMAKE_EXTRA_ARGS:-} -D${_v}=${_val}"
+    fi
+done
+
 # shellcheck disable=SC2086
 ${CMAKE_CMD} -S . -B build \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
@@ -67,6 +75,9 @@ if [ ! -f "${DEST}/bin/${APP_NAME}" ] && [ ! -f "${DEST}/bin/${APP_NAME}.exe" ];
     echo "build-app: FATAL: ${APP_NAME}{,.exe} not in ${DEST}/bin/" >&2
     ls -la "${DEST}/bin/" 2>/dev/null || true
     exit 1
+fi
+if [ -f "${DEST}/appinfo.env" ] && [ ! -f "${DEST}/appinfo" ]; then
+    cp "${DEST}/appinfo.env" "${DEST}/appinfo"
 fi
 if [ ! -f "${DEST}/appinfo.env" ]; then
     echo "build-app: FATAL: appinfo.env not installed" >&2

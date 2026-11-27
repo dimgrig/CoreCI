@@ -20,9 +20,17 @@ isEmpty(APPINFO_VERSION) {
 
 isEmpty(APPINFO_OUTPUT): APPINFO_OUTPUT = $$DESTDIR/appinfo.env
 
-APPINFO_CMD  = sed -e "s%@PROJECT_VERSION@%$$APPINFO_VERSION%g"
+APPINFO_CMD  = sed -e "s%@VERSION@%$$APPINFO_VERSION%g" \
+                   -e "s%@PROJECT_VERSION@%$$APPINFO_VERSION%g"
+for(_k, APPINFO_VARS) {
+    APPINFO_CMD += -e "s%@$${_k}@%$$$${_k}%g"
+}
 APPINFO_CMD += $$shell_path($$APPINFO_TEMPLATE) > $$shell_path($$APPINFO_OUTPUT)
 
 QMAKE_POST_LINK += $$escape_expand(\\n\\t) mkdir -p $$shell_path($$DESTDIR) && $$APPINFO_CMD
 
+!isEmpty(APPINFO_LEGACY_NAME) {
+    QMAKE_POST_LINK += $$escape_expand(\\n\\t) cp -f \
+        $$shell_path($$APPINFO_OUTPUT) $$shell_path($$DESTDIR)/$$APPINFO_LEGACY_NAME
+}
 
