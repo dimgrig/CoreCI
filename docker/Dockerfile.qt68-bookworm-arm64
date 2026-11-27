@@ -199,6 +199,29 @@ RUN set -eux; \
     echo "OK: qtmqtt ${QTMQTT_REF} installed"
 
 # ────────────────────────────────────────────────────────────────────────────
+# СТАДИЯ 2b: qtmqtt (ABI-совместим с 6.8.3)
+# ────────────────────────────────────────────────────────────────────────────
+FROM qt6-builder AS qhttpserver-builder
+
+ARG QT6_VERSION
+ARG QTHTTP_REF=6.8.3
+
+RUN set -eux; \
+    PREFIX=/opt/Qt/${QT6_VERSION}/gcc_arm64; \
+    echo "Building qhttpserver ref=${QTHTTP_REF} against Qt ${QT6_VERSION}"; \
+    git clone --depth 1 --branch ${QT6_VERSION} https://github.com/qt/qthttpserver.git /tmp/qthttpserver; \
+    mkdir -p /tmp/qthttpserver-build; \
+    cd /tmp/qthttpserver-build; \
+    "$PREFIX/bin/qt-configure-module" /tmp/qthttpserver -- -DCMAKE_BUILD_TYPE=Release; \
+    cmake --build . -j"$(nproc)"; \
+    cmake --install .; \
+    cd /; \
+    rm -rf /tmp/qthttpserver /tmp/qthttpserver-build \
+    test -f "${QT6_INSTALL_PREFIX}/lib/cmake/Qt6HttpServer/Qt6HttpServerConfig.cmake" \
+        || { echo "FATAL: Qt6HttpServerConfig.cmake not installed" >&2; exit 1; }; \
+    echo "OK: qthttpserver ${QTHTTP_REF} installed"
+
+# ────────────────────────────────────────────────────────────────────────────
 # СТАДИЯ 3: runtime
 # ────────────────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime

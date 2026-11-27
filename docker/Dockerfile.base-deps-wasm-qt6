@@ -85,6 +85,20 @@ RUN /bin/bash -c 'set -e; \
     rm -rf /tmp/qtscxml; \
     ls -la "$QP/lib/libQt6StateMachine.a"'
 
+# ── qthttpserver для Wasm ──
+RUN /bin/bash -c 'set -e; \
+    [ -f /opt/emsdk/emsdk_env.sh ] && cd /opt/emsdk && source ./emsdk_env.sh; \
+    QP="/opt/Qt/6.8.1/wasm_singlethread"; \
+    git clone --branch 6.8.1 --depth 1 https://github.com/qt/qthttpserver.git /tmp/qthttpserver; \
+    "$QP/bin/qt-cmake" -S /tmp/qthttpserver -B /tmp/qthttpserver/build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DQT_HOST_PATH=/opt/Qt/6.8.1/gcc_64 \
+        -DCMAKE_INSTALL_PREFIX="$QP" \
+        -DQT_BUILD_TESTS=OFF -DQT_BUILD_EXAMPLES=OFF; \
+    cmake --build /tmp/qthttpserver/build -j$(nproc); \
+    cmake --install /tmp/qthttpserver/build; \
+    rm -rf /tmp/qthttpserver; \
+    ls -la "$QP/lib/libQt6HttpServer.a"'
 
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
