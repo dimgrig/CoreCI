@@ -199,7 +199,7 @@ RUN set -eux; \
     echo "OK: qtmqtt ${QTMQTT_REF} installed"
 
 # ────────────────────────────────────────────────────────────────────────────
-# СТАДИЯ 2b: qtmqtt (ABI-совместим с 6.8.3)
+# СТАДИЯ 2b: qtwebsockets и qthttpserver (ABI-совместимы с 6.8.3)
 # ────────────────────────────────────────────────────────────────────────────
 FROM qt6-builder AS qhttpserver-builder
 
@@ -207,19 +207,27 @@ ARG QT6_VERSION
 ARG QTHTTP_REF=6.8.3
 
 RUN set -eux; \
-    PREFIX=/opt/Qt/${QT6_VERSION}/gcc_arm64; \
-    echo "Building qhttpserver ref=${QTHTTP_REF} against Qt ${QT6_VERSION}"; \
-    git clone --depth 1 --branch ${QT6_VERSION} https://github.com/qt/qthttpserver.git /tmp/qthttpserver; \
-    mkdir -p /tmp/qthttpserver-build; \
-    cd /tmp/qthttpserver-build; \
-    "$PREFIX/bin/qt-configure-module" /tmp/qthttpserver -- -DCMAKE_BUILD_TYPE=Release; \
-    cmake --build . -j"$(nproc)"; \
-    cmake --install .; \
-    cd /; \
-    rm -rf /tmp/qthttpserver /tmp/qthttpserver-build \
-    test -f "${QT6_INSTALL_PREFIX}/lib/cmake/Qt6HttpServer/Qt6HttpServerConfig.cmake" \
+    PREFIX="/opt/Qt/${QT6_VERSION}/gcc_arm64"; \
+    for MOD in qtwebsockets qthttpserver; do \
+        echo "Building ${MOD} ref=${QTHTTP_REF} against Qt ${QT6_VERSION}"; \
+        git clone --depth 1 --branch "${QTHTTP_REF}" "https://github.com{MOD}.git" "/tmp/${MOD}"; \
+        mkdir -p "/tmp/${MOD}-build"; \
+        cd "/tmp/${MOD}-build"; \
+        "$PREFIX/bin/qt-configure-module" "/tmp/${MOD}" -- \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQT_BUILD_TESTS=OFF \
+            -DQT_BUILD_EXAMPLES=OFF; \
+        cmake --build . -j"$(nproc)"; \
+        cmake --install .; \
+        cd /; \
+        rm -rf "/tmp/${MOD}" "/tmp/${MOD}-build"; \
+    done; \
+    test -f "$PREFIX/lib/cmake/Qt6WebSockets/Qt6WebSocketsConfig.cmake" \
+        || { echo "FATAL: Qt6WebSocketsConfig.cmake not installed" >&2; exit 1; }; \
+    test -f "$PREFIX/lib/cmake/Qt6HttpServer/Qt6HttpServerConfig.cmake" \
         || { echo "FATAL: Qt6HttpServerConfig.cmake not installed" >&2; exit 1; }; \
-    echo "OK: qthttpserver ${QTHTTP_REF} installed"
+    echo "OK: qtwebsockets + qthttpserver ${QTHTTP_REF} installed"
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # СТАДИЯ 3: runtime

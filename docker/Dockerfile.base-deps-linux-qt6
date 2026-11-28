@@ -99,7 +99,7 @@ EOF
 # qtbase + qtdeclarative + qtsvg + qttools приходят по умолчанию.
 # Доп. модули — только через -m (--modules), как в win64-qt6.
 RUN aqt -c /root/.config/aqt-settings.ini install-qt linux desktop ${QT6_VERSION} linux_gcc_64 \
-        -m qtserialbus qtserialport qt5compat qtscxml qtshadertools qthttpserver \
+        -m qtserialbus qtserialport qt5compat qtscxml qtshadertools qtwebsockets qthttpserver \
         -O /opt/Qt
         
 # ── qtmqtt6 (нет в архивах Qt) — собираем из исходников в prefix ──

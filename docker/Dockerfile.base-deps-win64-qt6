@@ -46,7 +46,7 @@ ARG QT6_VERSION=6.8.0
 # Модули: SerialBus / SerialPort / Core5Compat / StateMachine нужны Core напрямую.
 # Svg, qttools, Qml, Quick приходят транзитивно — явно их не заказываем.
 RUN aqt -c /root/.config/aqt-settings.ini install-qt windows desktop ${QT6_VERSION} win64_mingw \
-        -m qtserialbus qtserialport qt5compat qtscxml qtshadertools qthttpserver \
+        -m qtserialbus qtserialport qt5compat qtscxml qtshadertools qtwebsockets qthttpserver \
         -O /opt/Qt
 
 # ── Host: Linux gcc_64 — moc/uic/rcc для кросс-сборки ──
